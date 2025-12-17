@@ -104,6 +104,9 @@ class FontGenerator:
         Processes all fonts in the deduplication result and generates
         new font files with only the glyphs marked for retention.
         
+        优化：如果某个字体没有移除任何 glyph，则直接复制原文件，
+        避免不必要的 subsetting 处理。
+        
         Args:
             dedup_result: Result from DeduplicationEngine.deduplicate()
             output_dir: Directory where output fonts will be written
@@ -115,6 +118,8 @@ class FontGenerator:
         Raises:
             OSError: If the output directory cannot be created
         """
+        import shutil
+        
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -129,8 +134,18 @@ class FontGenerator:
             output_filename = f"{stem}{suffix}{extension}"
             output_path = output_dir / output_filename
             
-            # Generate the font
-            result_path = self.generate(font_path, glyphs_to_keep, output_path)
+            # 检查是否有 glyph 被移除
+            removed_glyphs = dedup_result.removed_glyphs.get(font_path, set())
+            
+            if not removed_glyphs:
+                # 没有移除任何 glyph，直接复制原文件
+                # 这样可以保证高优先级字体完全不变
+                shutil.copy2(font_path, output_path)
+                result_path = output_path
+            else:
+                # 有 glyph 被移除，执行 subsetting
+                result_path = self.generate(font_path, glyphs_to_keep, output_path)
+            
             generated_files.append(result_path)
         
         return generated_files

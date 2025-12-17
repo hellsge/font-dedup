@@ -18,6 +18,21 @@
 - **CLI 框架**: click（简洁的命令行接口）
 - **测试框架**: pytest + hypothesis（property-based testing）
 
+### 字形相似度算法设计决策
+
+**当前实现：严格相等性检查**
+
+系统采用二元相等性检查（完全相同 = 1.0，不同 = 0.0）而非渐进式相似度评分。这一设计基于以下考虑：
+
+1. **矢量数据的精确性**: TTF 轮廓数据是精确的矢量路径，不包含渲染时的抗锯齿或 hinting 差异
+2. **零误判保证**: 任何轮廓数据的差异都代表真实的设计差异，严格检查避免错误地删除实际不同的字形
+3. **性能优势**: 字节级比较比复杂的形状分析算法快得多，适合处理大型字体集
+4. **明确的语义**: 开发者可以清楚地知道"重复"意味着完全相同，"变体"意味着有任何差异
+
+**未来扩展方向**:
+- 如需更细粒度的相似度评估，可以扩展为基于轮廓点距离、形状特征或视觉感知的算法
+- 可以添加可配置的相似度算法选项，让用户根据需求选择严格模式或宽松模式
+
 ## 架构
 
 ```mermaid
@@ -99,16 +114,61 @@ class FontAnalyzer:
     def find_duplicates(self, fonts: list[Path]) -> DuplicateReport:
         """分析多个字体，找出重复的 glyph"""
         pass
+
+### 1.1. ShapeAnalyzer（字形分析器）
+
+负责提取和比较 glyph 的形状数据。
+
+```python
+class ShapeAnalyzer:
+    def extract_glyph_outline(self, font_path: Path, codepoint: int) -> GlyphOutline:
+        """提取指定字符的轮廓数据"""
+        pass
+    
+    def calculate_similarity(self, outline1: GlyphOutline, outline2: GlyphOutline) -> float:
+        """
+        计算两个字形的相似度（0.0-1.0）
+        
+        采用严格的相等性检查：只有轮廓数据完全相同才返回 1.0，
+        否则返回 0.0。这是因为 TTF 文件中的轮廓数据是矢量数据，
+        不包含抗锯齿或 hinting 等渲染时的差异。任何轮廓数据的
+        不同都意味着字形设计上的真实差异。
+        """
+        pass
+    
+    def find_shape_variants(
+        self, 
+        fonts: list[Path], 
+        similarity_threshold: float = 1.0,
+        codepoint_limit: int | None = None
+    ) -> ShapeVariantReport:
+        """
+        找出字形变体（相同码点但形状不同的字符）
+        
+        注意：此方法可能需要较长时间，因为需要提取和比较每个字符的轮廓数据。
+        对于包含数千字符的字体，建议使用 codepoint_limit 参数限制分析范围。
+        
+        Args:
+            fonts: 要分析的字体文件路径列表
+            similarity_threshold: 相似度阈值（当前实现使用严格相等，此参数保留用于兼容性）
+            codepoint_limit: 可选的 codepoint 分析数量限制
+        """
+        pass
 ```
 
 ### 2. DeduplicationEngine（去重引擎）
 
-根据优先级策略执行 glyph 去重。
+根据优先级策略执行 glyph 去重，支持基于字形相似度的智能去重。
 
 ```python
 class DeduplicationEngine:
-    def __init__(self, priority: list[Path] | None = None):
-        """初始化，可选指定字体优先级"""
+    def __init__(
+        self, 
+        priority: list[Path] | None = None,
+        shape_analysis_enabled: bool = False,
+        similarity_threshold: float = 1.0
+    ):
+        """初始化，可选指定字体优先级和字形分析参数"""
         pass
     
     def deduplicate(
@@ -118,6 +178,15 @@ class DeduplicationEngine:
         exclude_ranges: list[tuple[int, int]] | None = None
     ) -> DeduplicationResult:
         """执行去重，返回每个字体应保留的 glyph"""
+        pass
+    
+    def deduplicate_with_shape_analysis(
+        self,
+        fonts: list[Path],
+        unicode_ranges: list[tuple[int, int]] | None = None,
+        exclude_ranges: list[tuple[int, int]] | None = None
+    ) -> ShapeAwareDeduplicationResult:
+        """执行基于字形分析的智能去重"""
         pass
 ```
 
@@ -218,6 +287,21 @@ class GlyphInfo:
     glyph_index: int        # 在字体中的索引
     
 @dataclass
+class GlyphOutline:
+    """字形轮廓数据"""
+    codepoint: int
+    font_path: Path
+    outline_data: bytes     # 轮廓的二进制数据
+    bounding_box: tuple[float, float, float, float]  # (xMin, yMin, xMax, yMax)
+    
+@dataclass
+class ShapeVariant:
+    """字形变体信息"""
+    codepoint: int
+    fonts: list[Path]       # 包含此变体的字体列表
+    similarity_scores: dict[tuple[Path, Path], float]  # 字体对之间的相似度
+    
+@dataclass
 class FontMetadata:
     """字体元数据"""
     path: Path
@@ -233,10 +317,26 @@ class DuplicateReport:
     total_duplicate_count: int
     
 @dataclass
+class ShapeVariantReport:
+    """字形变体分析报告"""
+    fonts: list[FontMetadata]
+    shape_variants: list[ShapeVariant]  # 检测到的字形变体
+    unicode_duplicates: dict[int, list[Path]]  # 纯 Unicode 重复（高相似度）
+    total_variant_count: int
+    
+@dataclass
 class DeduplicationResult:
     """去重结果"""
     font_glyphs: dict[Path, set[int]]  # 每个字体应保留的 code point
     removed_glyphs: dict[Path, set[int]]  # 每个字体被移除的 code point
+    
+@dataclass
+class ShapeAwareDeduplicationResult:
+    """基于字形分析的去重结果"""
+    font_glyphs: dict[Path, set[int]]  # 每个字体应保留的 code point
+    removed_glyphs: dict[Path, set[int]]  # 每个字体被移除的 code point
+    preserved_variants: list[ShapeVariant]  # 被保护的字形变体
+    similarity_data: dict[int, dict[tuple[Path, Path], float]]  # 相似度数据
     
 @dataclass
 class ValidationResult:
@@ -318,6 +418,57 @@ class ValidationResult:
 
 **Validates: Requirements 7.1, 7.4**
 
+### Property 12: 字形轮廓提取完整性
+
+*对于任意*有效的字体文件和其包含的 Unicode 码点，字形分析器提取的轮廓数据应包含完整的路径信息且边界框坐标有效。
+
+**Validates: Requirements 8.1**
+
+### Property 13: 字形相似度计算有效性
+
+*对于任意*两个字形轮廓，相似度计算结果应在 0.0 到 1.0 范围内，且完全相同的字形相似度应等于 1.0。
+
+**设计决策：** 当前实现采用严格的二元相等性检查（1.0 表示完全相同，0.0 表示不同），而非渐进式相似度评分。这是因为 TTF 轮廓数据是精确的矢量数据，任何差异都代表真实的设计差异。未来如需更细粒度的相似度评估，可以扩展为基于轮廓点距离或形状特征的算法。
+
+**Validates: Requirements 8.2**
+
+### Property 14: 字形变体识别准确性
+
+*对于任意*字形相似度阈值和字形对，当相似度低于阈值时应被标记为字形变体，高于或等于阈值时应被标记为重复。
+
+**设计决策：** 在当前的严格相等实现中，默认阈值为 1.0（完全相同）。相似度为 1.0 的字形对被标记为 Unicode 重复，相似度为 0.0 的字形对被标记为字形变体。这种方法确保了零误判，且性能最优，因为严格相等检查比复杂的相似度计算更快。
+
+**Validates: Requirements 8.3**
+
+### Property 15: 字形检测模式一致性
+
+*对于任意*字体集合，启用字形检测模式时的去重决策应基于字形相似度，而非启用时应仅基于 Unicode 码点匹配。
+
+**Validates: Requirements 8.4**
+
+### Property 16: 报告分类显示准确性
+
+*对于任意*包含字形变体的分析结果，报告应正确区分并分别显示"Unicode 重复"和"字形变体"两种类型。
+
+**Validates: Requirements 8.5**
+
+## 性能考虑
+
+### 字形分析性能优化
+
+字形变体检测涉及提取和比较大量字形轮廓数据，可能成为性能瓶颈。系统采用以下优化策略：
+
+1. **批量字体打开**: 一次性打开所有字体文件并保持打开状态，避免重复的文件 I/O 操作
+2. **共享码点过滤**: 仅分析在多个字体中都存在的码点，跳过只在单个字体中出现的字符
+3. **可选的码点限制**: 提供 `codepoint_limit` 参数，允许用户限制分析范围以加快处理速度
+4. **延迟计算**: 仅在启用字形检测模式时才执行轮廓提取和比较
+
+**性能预期**:
+- 默认阈值 1.0 使用严格相等检查，性能最优
+- 对于包含数千字符的 CJK 字体，完整的字形分析可能需要数分钟
+- 建议在初次分析时使用 `codepoint_limit` 参数进行快速评估
+- 对于生产环境，可以将分析结果缓存以避免重复计算
+
 ## 错误处理
 
 ### 输入验证错误
@@ -342,6 +493,14 @@ class ValidationResult:
 |---------|---------|---------|
 | ValidationError | 输出字体验证失败 | 返回 ValidationResult，包含错误详情 |
 
+### 字形分析错误
+
+| 错误类型 | 触发条件 | 处理方式 |
+|---------|---------|---------|
+| InvalidSimilarityThresholdError | 相似度阈值不在 0.0-1.0 范围内 | 抛出异常，提示有效范围 |
+| GlyphExtractionError | 无法提取特定字形的轮廓数据 | 记录警告，跳过该字形继续处理 |
+| EmptyFontListError | 字形分析时未提供字体文件 | 抛出异常，提示至少需要一个字体 |
+
 ## 测试策略
 
 ### 单元测试
@@ -353,24 +512,32 @@ class ValidationResult:
    - 处理无效文件格式
    - 提取 glyph 信息的准确性
 
-2. **DeduplicationEngine 测试**
+2. **ShapeAnalyzer 测试**
+   - 字形轮廓数据提取
+   - 字形相似度计算准确性
+   - 字形变体识别逻辑
+
+3. **DeduplicationEngine 测试**
    - 优先级排序逻辑
    - Unicode 范围过滤
    - 排除范围处理
+   - 字形检测模式切换
+   - 基于相似度的去重决策
 
-3. **FontGenerator 测试**
+4. **FontGenerator 测试**
    - 生成有效 TTF 文件
    - 命名规则应用
    - Metadata 保留
 
-4. **Validator 测试**
+5. **Validator 测试**
    - TTF 格式验证
    - Glyph 可访问性检查
 
-5. **Reporter 测试**
+6. **Reporter 测试**
    - 最终报告中文输出
    - 错误信息中文输出
    - 技术关键词英文保留
+   - 字形变体与 Unicode 重复的区分显示
    - 测试代码使用英文
 
 ### Property-Based Testing

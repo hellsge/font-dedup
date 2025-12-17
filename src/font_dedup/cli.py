@@ -49,7 +49,18 @@ def main(ctx):
 
 @main.command()
 @click.argument('fonts', nargs=-1, required=True, type=click.Path(exists=True, path_type=Path))
-def analyze(fonts):
+@click.option(
+    '--shape-analysis',
+    is_flag=True,
+    help='启用字形检测模式，分析相同 Unicode 码点的字形差异'
+)
+@click.option(
+    '--similarity-threshold',
+    type=float,
+    default=1.0,
+    help='字形相似度阈值 (0.0-1.0)，低于此值视为字形变体（默认: 1.0）'
+)
+def analyze(fonts, shape_analysis, similarity_threshold):
     """
     分析字体文件中的重复 glyph
     
@@ -59,7 +70,14 @@ def analyze(fonts):
     
     使用示例:
     
+      # 基本分析
       font-dedup analyze font1.ttf font2.ttf font3.ttf
+      
+      # 启用字形检测
+      font-dedup analyze font1.ttf font2.ttf --shape-analysis
+      
+      # 自定义相似度阈值
+      font-dedup analyze font1.ttf font2.ttf --shape-analysis --similarity-threshold 0.9
     """
     # 验证至少提供了一个字体文件
     if not fonts:
@@ -71,12 +89,20 @@ def analyze(fonts):
         if font_path.suffix.lower() not in ['.ttf', '.otf']:
             raise FontDedupError(f"不支持的字体格式: {font_path.name}，仅支持 TTF 和 OTF 格式")
     
+    # 验证相似度阈值
+    if shape_analysis and not (0.0 <= similarity_threshold <= 1.0):
+        raise FontDedupError(f"相似度阈值必须在 0.0 到 1.0 之间，当前值: {similarity_threshold}")
+    
     try:
         # 转换为 Path 对象列表
         font_paths = [Path(f) for f in fonts]
         
         # 执行分析并生成报告
-        report = analyze_and_report(font_paths)
+        report = analyze_and_report(
+            font_paths,
+            shape_analysis_enabled=shape_analysis,
+            similarity_threshold=similarity_threshold
+        )
         
         # 输出报告
         click.echo(report)
@@ -120,7 +146,18 @@ def analyze(fonts):
     default='_dedup',
     help='输出文件名后缀（默认: _dedup）'
 )
-def deduplicate(fonts, output_dir, priority, unicode_ranges, exclude_ranges, suffix):
+@click.option(
+    '--shape-analysis',
+    is_flag=True,
+    help='启用字形检测模式，保护相同 Unicode 码点的不同字形'
+)
+@click.option(
+    '--similarity-threshold',
+    type=float,
+    default=1.0,
+    help='字形相似度阈值 (0.0-1.0)，低于此值视为字形变体（默认: 1.0）'
+)
+def deduplicate(fonts, output_dir, priority, unicode_ranges, exclude_ranges, suffix, shape_analysis, similarity_threshold):
     """
     执行字体 glyph 去重
     
@@ -141,6 +178,12 @@ def deduplicate(fonts, output_dir, priority, unicode_ranges, exclude_ranges, suf
     
       # 排除 ASCII 范围
       font-dedup deduplicate font1.ttf font2.ttf -o ./output -e 0x0020-0x007F
+      
+      # 启用字形检测（保护字形变体）
+      font-dedup deduplicate font1.ttf font2.ttf -o ./output --shape-analysis
+      
+      # 自定义相似度阈值
+      font-dedup deduplicate font1.ttf font2.ttf -o ./output --shape-analysis --similarity-threshold 0.9
     """
     # 验证至少提供了一个字体文件
     if not fonts:
@@ -202,6 +245,10 @@ def deduplicate(fonts, output_dir, priority, unicode_ranges, exclude_ranges, suf
             except ValueError as e:
                 raise FontDedupError(f"排除范围格式无效 {range_str}，应为 START-END 格式（例如: 0x0020-0x007F）")
     
+    # 验证相似度阈值
+    if shape_analysis and not (0.0 <= similarity_threshold <= 1.0):
+        raise FontDedupError(f"相似度阈值必须在 0.0 到 1.0 之间，当前值: {similarity_threshold}")
+    
     # 验证输出目录
     output_dir = Path(output_dir)
     if output_dir.exists() and not output_dir.is_dir():
@@ -214,7 +261,9 @@ def deduplicate(fonts, output_dir, priority, unicode_ranges, exclude_ranges, suf
             font_paths=font_paths,
             priority=priority_list,
             unicode_ranges=parsed_unicode_ranges,
-            exclude_ranges=parsed_exclude_ranges
+            exclude_ranges=parsed_exclude_ranges,
+            shape_analysis_enabled=shape_analysis,
+            similarity_threshold=similarity_threshold
         )
         
         # 输出去重报告

@@ -11,7 +11,13 @@ Reporter 模块用于生成中文报告和错误信息。
 
 from pathlib import Path
 
-from .models import DuplicateReport, DeduplicationResult, ValidationResult
+from .models import (
+    DuplicateReport,
+    DeduplicationResult,
+    ValidationResult,
+    ShapeVariantReport,
+    ShapeAwareDeduplicationResult,
+)
 
 
 class Reporter:
@@ -22,16 +28,25 @@ class Reporter:
     但技术关键词（TTF、glyph、cmap、Unicode、code point 等）保留英文。
     """
     
-    def generate_analysis_report(self, duplicate_report: DuplicateReport) -> str:
+    def generate_analysis_report(
+        self, 
+        duplicate_report: DuplicateReport | ShapeVariantReport
+    ) -> str:
         """
         生成分析报告（中文）。
         
+        支持基本的重复分析报告和字形变体分析报告。
+        
         Args:
-            duplicate_report: 重复分析报告数据
+            duplicate_report: 重复分析报告数据或字形变体报告数据
             
         Returns:
             格式化的中文分析报告字符串
         """
+        # 如果是字形变体报告，使用专门的方法
+        if isinstance(duplicate_report, ShapeVariantReport):
+            return self.generate_shape_variant_report(duplicate_report)
+        
         lines = []
         lines.append("=" * 60)
         lines.append("字体 Glyph 重复分析报告")
@@ -93,19 +108,30 @@ class Reporter:
         
         return '\n'.join(lines)
     
-    def generate_deduplication_report(self, result: DeduplicationResult) -> str:
+    def generate_deduplication_report(
+        self, 
+        result: DeduplicationResult | ShapeAwareDeduplicationResult
+    ) -> str:
         """
         生成去重结果报告（中文）。
         
+        支持基本的去重结果和基于字形分析的去重结果。
+        
         Args:
-            result: 去重结果数据
+            result: 去重结果数据或字形感知去重结果数据
             
         Returns:
             格式化的中文去重报告字符串
         """
         lines = []
         lines.append("=" * 60)
-        lines.append("字体 Glyph 去重结果报告")
+        
+        # 根据结果类型调整标题
+        if isinstance(result, ShapeAwareDeduplicationResult):
+            lines.append("字体 Glyph 去重结果报告（字形感知模式）")
+        else:
+            lines.append("字体 Glyph 去重结果报告")
+        
         lines.append("=" * 60)
         lines.append("")
         
@@ -115,7 +141,37 @@ class Reporter:
         lines.append(f"处理的字体文件数量: {len(result.font_glyphs)}")
         lines.append(f"保留的 Glyph 总数: {total_kept}")
         lines.append(f"移除的 Glyph 总数: {total_removed}")
+        
+        # 如果是字形感知模式，显示保护的字形变体信息
+        if isinstance(result, ShapeAwareDeduplicationResult):
+            lines.append(f"保护的字形变体数量: {len(result.preserved_variants)}")
+        
         lines.append("")
+        
+        # 显示保护的字形变体详情
+        if isinstance(result, ShapeAwareDeduplicationResult) and result.preserved_variants:
+            lines.append("-" * 60)
+            lines.append("保护的字形变体")
+            lines.append("-" * 60)
+            lines.append("")
+            lines.append("以下 Code Point 在不同字体中具有不同字形，已保留所有变体:")
+            lines.append("")
+            
+            if len(result.preserved_variants) <= 20:
+                for variant in result.preserved_variants:
+                    codepoint = variant.codepoint
+                    char = chr(codepoint) if 0x20 <= codepoint <= 0x10FFFF else '?'
+                    font_names = ', '.join(f.name for f in variant.fonts)
+                    lines.append(f"  U+{codepoint:04X} ({char}): {font_names}")
+            else:
+                for variant in result.preserved_variants[:20]:
+                    codepoint = variant.codepoint
+                    char = chr(codepoint) if 0x20 <= codepoint <= 0x10FFFF else '?'
+                    font_names = ', '.join(f.name for f in variant.fonts)
+                    lines.append(f"  U+{codepoint:04X} ({char}): {font_names}")
+                lines.append(f"  ... 还有 {len(result.preserved_variants) - 20} 个")
+            
+            lines.append("")
         
         # 每个字体的详细信息
         lines.append("-" * 60)
@@ -251,3 +307,107 @@ class Reporter:
         percentage = (current / total * 100) if total > 0 else 0
         desc_part = f"{description}: " if description else ""
         return f"{desc_part}[{current}/{total}] {percentage:.1f}%"
+    
+    def generate_shape_variant_report(self, variant_report: ShapeVariantReport) -> str:
+        """
+        生成字形变体分析报告（中文）。
+        
+        区分显示"Unicode 重复"和"字形变体"两种类型。
+        
+        Args:
+            variant_report: 字形变体分析报告数据
+            
+        Returns:
+            格式化的中文字形变体报告字符串
+        """
+        lines = []
+        lines.append("=" * 60)
+        lines.append("字体 Glyph 字形变体分析报告")
+        lines.append("=" * 60)
+        lines.append("")
+        
+        # 字体文件列表
+        lines.append(f"分析的字体文件数量: {len(variant_report.fonts)}")
+        lines.append("")
+        
+        for i, font_meta in enumerate(variant_report.fonts, 1):
+            lines.append(f"{i}. {font_meta.path.name}")
+            lines.append(f"   字体家族: {font_meta.family_name}")
+            lines.append(f"   Glyph 总数: {font_meta.glyph_count}")
+            lines.append(f"   支持的 Unicode Code Point 数量: {len(font_meta.codepoints)}")
+            lines.append("")
+        
+        # 分类统计
+        lines.append("-" * 60)
+        lines.append("分类统计")
+        lines.append("-" * 60)
+        lines.append(f"发现的字形变体总数: {variant_report.total_variant_count}")
+        lines.append(f"发现的 Unicode 重复总数: {len(variant_report.unicode_duplicates)}")
+        lines.append("")
+        
+        # Unicode 重复部分
+        if variant_report.unicode_duplicates:
+            lines.append("-" * 60)
+            lines.append("Unicode 重复（相同字形）")
+            lines.append("-" * 60)
+            lines.append("")
+            lines.append("这些 Code Point 在多个字体中具有相同的字形，可以安全去重。")
+            lines.append("")
+            
+            if len(variant_report.unicode_duplicates) <= 20:
+                lines.append("Unicode 重复列表:")
+                for codepoint in sorted(variant_report.unicode_duplicates.keys()):
+                    fonts = variant_report.unicode_duplicates[codepoint]
+                    char = chr(codepoint) if 0x20 <= codepoint <= 0x10FFFF else '?'
+                    font_names = ', '.join(f.name for f in fonts)
+                    lines.append(f"  U+{codepoint:04X} ({char}): {font_names}")
+            else:
+                lines.append("Unicode 重复示例（前 20 个）:")
+                for i, codepoint in enumerate(sorted(variant_report.unicode_duplicates.keys())[:20]):
+                    fonts = variant_report.unicode_duplicates[codepoint]
+                    char = chr(codepoint) if 0x20 <= codepoint <= 0x10FFFF else '?'
+                    font_names = ', '.join(f.name for f in fonts)
+                    lines.append(f"  U+{codepoint:04X} ({char}): {font_names}")
+                lines.append(f"  ... 还有 {len(variant_report.unicode_duplicates) - 20} 个")
+            lines.append("")
+        
+        # 字形变体部分
+        if variant_report.shape_variants:
+            lines.append("-" * 60)
+            lines.append("字形变体（不同字形）")
+            lines.append("-" * 60)
+            lines.append("")
+            lines.append("这些 Code Point 在不同字体中具有不同的字形表现，")
+            lines.append("可能代表不同语言/地区的字形差异，建议保留。")
+            lines.append("")
+            
+            if len(variant_report.shape_variants) <= 20:
+                lines.append("字形变体列表:")
+                for variant in variant_report.shape_variants:
+                    codepoint = variant.codepoint
+                    char = chr(codepoint) if 0x20 <= codepoint <= 0x10FFFF else '?'
+                    font_names = ', '.join(f.name for f in variant.fonts)
+                    lines.append(f"  U+{codepoint:04X} ({char}): {font_names}")
+                    
+                    # 显示相似度信息
+                    if variant.similarity_scores:
+                        lines.append("    相似度:")
+                        for (font1, font2), score in variant.similarity_scores.items():
+                            lines.append(f"      {font1.name} ↔ {font2.name}: {score:.2f}")
+            else:
+                lines.append("字形变体示例（前 20 个）:")
+                for variant in variant_report.shape_variants[:20]:
+                    codepoint = variant.codepoint
+                    char = chr(codepoint) if 0x20 <= codepoint <= 0x10FFFF else '?'
+                    font_names = ', '.join(f.name for f in variant.fonts)
+                    lines.append(f"  U+{codepoint:04X} ({char}): {font_names}")
+                lines.append(f"  ... 还有 {len(variant_report.shape_variants) - 20} 个")
+            lines.append("")
+        
+        if not variant_report.unicode_duplicates and not variant_report.shape_variants:
+            lines.append("未发现重复或字形变体。")
+            lines.append("")
+        
+        lines.append("=" * 60)
+        
+        return '\n'.join(lines)

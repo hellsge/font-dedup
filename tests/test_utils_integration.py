@@ -15,10 +15,10 @@ from src.font_dedup.utils import (
 
 def test_analyze_and_report_with_real_fonts():
     """Test analyze_and_report with actual font files."""
-    # Use fonts from the workspace
+    # 使用小型字体文件来加快测试速度
     font_paths = [
-        Path("NotoSansJP-Bold.ttf"),
-        Path("NotoSansKR-Bold.ttf"),
+        Path("fonts/NotoSans-Light.ttf"),
+        Path("fonts/NotoSans-Regular.ttf"),
     ]
     
     # Check if fonts exist
@@ -39,10 +39,10 @@ def test_analyze_and_report_with_real_fonts():
 
 def test_deduplicate_and_report_with_real_fonts():
     """Test deduplicate_and_report with actual font files."""
-    # Use fonts from the workspace
+    # 使用小型字体文件来加快测试速度
     font_paths = [
-        Path("NotoSansJP-Bold.ttf"),
-        Path("NotoSansKR-Bold.ttf"),
+        Path("fonts/NotoSans-Light.ttf"),
+        Path("fonts/NotoSans-Regular.ttf"),
     ]
     
     # Check if fonts exist
@@ -67,8 +67,8 @@ def test_deduplicate_and_report_with_real_fonts():
 
 def test_get_file_size_report_with_real_files():
     """Test get_file_size_report with actual files."""
-    # Use existing font files
-    font_path = Path("NotoSansJP-Bold.ttf")
+    # 使用小型字体文件
+    font_path = Path("fonts/NotoSansTaiViet-Regular.ttf")
     
     if not font_path.exists():
         # Skip if font doesn't exist

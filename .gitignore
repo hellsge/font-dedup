@@ -45,6 +45,7 @@ Thumbs.db
 # Project specific
 output/
 *.ttf
+!fonts/*.ttf
 *.otf
 *.ttf.bak
 demo_*.py

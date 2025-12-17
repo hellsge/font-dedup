@@ -16,12 +16,18 @@ from .reporter import Reporter
 from .models import DeduplicationResult
 
 
-def analyze_and_report(font_paths: list[Path]) -> str:
+def analyze_and_report(
+    font_paths: list[Path],
+    shape_analysis_enabled: bool = False,
+    similarity_threshold: float = 1.0
+) -> str:
     """
     分析字体并生成中文报告。
     
     Args:
         font_paths: 要分析的字体文件路径列表
+        shape_analysis_enabled: 是否启用字形检测模式
+        similarity_threshold: 字形相似度阈值 (0.0-1.0)
         
     Returns:
         格式化的中文分析报告
@@ -34,8 +40,19 @@ def analyze_and_report(font_paths: list[Path]) -> str:
     reporter = Reporter()
     
     try:
-        duplicate_report = analyzer.find_duplicates(font_paths)
-        return reporter.generate_analysis_report(duplicate_report)
+        if shape_analysis_enabled:
+            # 使用字形检测模式
+            from .shape_analyzer import ShapeAnalyzer
+            shape_analyzer = ShapeAnalyzer()
+            shape_variant_report = shape_analyzer.find_shape_variants(
+                fonts=font_paths,
+                similarity_threshold=similarity_threshold
+            )
+            return reporter.generate_shape_variant_report(shape_variant_report)
+        else:
+            # 使用基本分析模式
+            duplicate_report = analyzer.find_duplicates(font_paths)
+            return reporter.generate_analysis_report(duplicate_report)
     except Exception as e:
         return reporter.format_error(e)
 
@@ -44,7 +61,9 @@ def deduplicate_and_report(
     font_paths: list[Path],
     priority: Optional[list[Path]] = None,
     unicode_ranges: Optional[list[tuple[int, int]]] = None,
-    exclude_ranges: Optional[list[tuple[int, int]]] = None
+    exclude_ranges: Optional[list[tuple[int, int]]] = None,
+    shape_analysis_enabled: bool = False,
+    similarity_threshold: float = 1.0
 ) -> tuple[DeduplicationResult, str]:
     """
     执行去重并生成中文报告。
@@ -54,6 +73,8 @@ def deduplicate_and_report(
         priority: 可选的优先级顺序
         unicode_ranges: 可选的 Unicode 范围
         exclude_ranges: 可选的排除范围
+        shape_analysis_enabled: 是否启用字形检测模式
+        similarity_threshold: 字形相似度阈值 (0.0-1.0)
         
     Returns:
         元组 (去重结果, 中文报告)
@@ -62,15 +83,30 @@ def deduplicate_and_report(
         ValueError: 如果字体列表为空
         FileNotFoundError: 如果字体文件不存在
     """
-    engine = DeduplicationEngine(priority=priority)
+    engine = DeduplicationEngine(
+        priority=priority,
+        shape_analysis_enabled=shape_analysis_enabled,
+        similarity_threshold=similarity_threshold
+    )
     reporter = Reporter()
     
     try:
-        result = engine.deduplicate(
-            fonts=font_paths,
-            unicode_ranges=unicode_ranges,
-            exclude_ranges=exclude_ranges
-        )
+        if shape_analysis_enabled:
+            # 使用字形检测模式
+            result = engine.deduplicate_with_shape_analysis(
+                fonts=font_paths,
+                unicode_ranges=unicode_ranges,
+                exclude_ranges=exclude_ranges
+            )
+        else:
+            # 使用基本去重模式
+            result = engine.deduplicate(
+                fonts=font_paths,
+                unicode_ranges=unicode_ranges,
+                exclude_ranges=exclude_ranges
+            )
+        
+        # generate_deduplication_report 可以处理两种类型的结果
         report = reporter.generate_deduplication_report(result)
         return result, report
     except Exception as e:

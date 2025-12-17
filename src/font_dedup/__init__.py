@@ -13,8 +13,13 @@ from .models import (
     DuplicateReport,
     DeduplicationResult,
     ValidationResult,
+    GlyphOutline,
+    ShapeVariant,
+    ShapeVariantReport,
+    ShapeAwareDeduplicationResult,
 )
 from .analyzer import FontAnalyzer
+from .shape_analyzer import ShapeAnalyzer
 from .engine import DeduplicationEngine
 from .generator import FontGenerator
 from .validator import Validator
@@ -33,7 +38,12 @@ __all__ = [
     "DuplicateReport",
     "DeduplicationResult",
     "ValidationResult",
+    "GlyphOutline",
+    "ShapeVariant",
+    "ShapeVariantReport",
+    "ShapeAwareDeduplicationResult",
     "FontAnalyzer",
+    "ShapeAnalyzer",
     "DeduplicationEngine",
     "FontGenerator",
     "Validator",

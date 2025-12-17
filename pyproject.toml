@@ -44,6 +44,10 @@ where = ["src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "cjk: marks tests that use large CJK fonts (deselect with '-m \"not cjk\"')",
+]
 
 [tool.hypothesis]
 deadline = 500

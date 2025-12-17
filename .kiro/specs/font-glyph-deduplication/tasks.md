@@ -145,6 +145,138 @@
     - 测试错误处理
     - _Requirements: 1.1, 2.1, 3.1, 7.1_
 
-- [x] 11. Final Checkpoint - 确保所有测试通过
+- [x] 11. ShapeAnalyzer 字形分析器实现
+  - [x] 11.1 实现字形轮廓提取功能
+    - 使用 fonttools 提取 glyph 轮廓数据
+    - 计算字形边界框
+    - 返回 GlyphOutline 对象
+    - _Requirements: 8.1_
+  - [ ]* 11.2 编写 Property Test: 字形轮廓提取完整性
+    - **Property 12: 字形轮廓提取完整性**
+    - **Validates: Requirements 8.1**
+  - [x] 11.3 实现字形相似度计算功能
+    - 基于轮廓数据计算两个字形的相似度
+    - 返回 0.0-1.0 范围的相似度值
+    - 处理边界情况（空轮廓、相同轮廓等）
+    - _Requirements: 8.2_
+  - [ ]* 11.4 编写 Property Test: 字形相似度计算有效性
+    - **Property 13: 字形相似度计算有效性**
+    - **Validates: Requirements 8.2**
+  - [x] 11.5 实现字形变体检测功能
+    - 分析多个字体中相同码点的字形差异
+    - 根据相似度阈值识别字形变体
+    - 生成 ShapeVariantReport
+    - _Requirements: 8.3_
+  - [ ]* 11.6 编写 Property Test: 字形变体识别准确性
+    - **Property 14: 字形变体识别准确性**
+    - **Validates: Requirements 8.3**
+
+- [x] 12. 更新数据模型
+  - [x] 12.1 添加字形检测相关数据模型
+    - 实现 GlyphOutline、ShapeVariant、ShapeVariantReport、ShapeAwareDeduplicationResult dataclass
+    - 更新现有模型以支持字形数据
+    - _Requirements: 8.1, 8.2, 8.3_
+
+- [x] 13. 扩展 DeduplicationEngine 支持字形检测
+
+
+
+
+  - [x] 13.1 添加字形检测模式参数
+
+
+    - 扩展构造函数支持 shape_analysis_enabled 和 similarity_threshold 参数
+    - 集成 ShapeAnalyzer 组件
+    - _Requirements: 8.4_
+  - [x] 13.2 实现基于字形分析的去重逻辑
+
+
+    - 实现 deduplicate_with_shape_analysis 方法
+    - 基于字形相似度而非仅 Unicode 码点进行去重决策
+    - 返回 ShapeAwareDeduplicationResult
+    - _Requirements: 8.4_
+  - [ ]* 13.3 编写 Property Test: 字形检测模式一致性
+    - **Property 15: 字形检测模式一致性**
+    - **Validates: Requirements 8.4**
+
+- [x] 14. 扩展 Reporter 支持字形变体报告
+
+
+
+
+  - [x] 14.1 实现字形变体报告生成
+
+
+    - 添加 generate_shape_variant_report 方法
+    - 区分显示"Unicode 重复"和"字形变体"
+    - 使用中文输出，技术关键词保留英文
+    - _Requirements: 8.5, 7.1, 7.4_
+  - [ ]* 14.2 编写 Property Test: 报告分类显示准确性
+    - **Property 16: 报告分类显示准确性**
+    - **Validates: Requirements 8.5**
+  - [x] 14.3 更新现有报告方法
+
+
+    - 在分析报告中包含字形变体信息
+    - 在去重报告中显示保护的字形变体
+    - _Requirements: 8.5_
+
+
+- [x] 15. 扩展 CLI 支持字形检测选项
+
+
+
+  - [x] 15.1 添加字形检测相关命令行参数
+
+
+    - 添加 `--shape-analysis` flag 启用字形检测
+    - 添加 `--similarity-threshold` 参数设置相似度阈值
+    - 更新帮助信息（中文）
+    - _Requirements: 8.4, 7.2_
+  - [x] 15.2 集成字形检测到 analyze 和 deduplicate 命令
+
+
+    - 在 analyze 命令中支持字形变体分析
+    - 在 deduplicate 命令中支持基于字形的去重
+    - _Requirements: 8.4, 8.5_
+
+
+- [x] 16. Checkpoint - 确保字形检测功能测试通过
+
+
+
+
+  - 确保所有字形检测相关测试通过，如有问题请询问用户。
+
+- [x] 17. 集成测试和文档更新
+
+
+
+
+
+
+
+  - [x] 17.1 编写字形检测集成测试
+
+
+
+    - 使用实际字体文件测试字形检测功能
+    - 测试 SC/KR 字形差异识别
+    - 测试完整的字形检测去重流程
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+  - [x] 17.2 更新 README 文档
+
+
+    - 添加字形检测功能说明
+    - 添加使用示例
+    - 更新技术栈说明
+    - _Requirements: 8.4, 8.5_
+
+
+- [x] 18. Final Checkpoint - 确保所有测试通过
+
+
+
+
   - 确保所有测试通过，如有问题请询问用户。
 

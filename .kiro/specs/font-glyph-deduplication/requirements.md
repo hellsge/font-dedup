@@ -13,6 +13,9 @@
 - **Subsetting（子集化）**: 从字体中提取特定字符集的过程
 - **Primary Font（主字体）**: 保留完整 glyph 的基准字体
 - **Secondary Font（次要字体）**: 需要删除与主字体重复 glyph 的字体
+- **Glyph Shape（字形形状）**: glyph 的实际视觉轮廓，不同于 Unicode 映射
+- **Glyph Variant（字形变体）**: 相同 Unicode 码点在不同语言/地区的不同字形表现
+- **Shape Similarity（字形相似度）**: 两个字形在视觉上的相似程度，用数值表示
 
 ## 需求列表
 
@@ -88,4 +91,16 @@
 2. WHEN 编写代码注释 THEN Output_System SHALL 使用中文编写注释
 3. WHEN 测试代码运行时 THEN Test_System SHALL 使用英文进行测试流程和断言
 4. WHEN 输出包含技术关键词、常用名词或 CLI 命令 THEN Output_System SHALL 保留英文原文
+
+### 需求 8
+
+**用户故事:** 作为开发者，我希望检测相同 Unicode 码点在不同字体中的字形差异，以便避免错误地删除具有不同视觉表现的字符。
+
+#### 验收标准
+
+1. WHEN 分析字体时 THEN Shape_Analyzer SHALL 提取每个 glyph 的轮廓数据用于形状比较
+2. WHEN 发现相同 Unicode 码点 THEN Shape_Analyzer SHALL 计算不同字体间该字符的字形相似度
+3. WHEN 字形相似度低于阈值 THEN Deduplication_Engine SHALL 将其标记为字形变体而非重复
+4. WHERE 用户启用字形检测模式 THEN Deduplication_Engine SHALL 基于字形相似度而非仅 Unicode 码点进行去重决策
+5. WHEN 检测到字形变体 THEN Reporter SHALL 在报告中区分显示"Unicode 重复"和"字形变体"
 

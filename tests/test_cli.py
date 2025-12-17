@@ -65,9 +65,9 @@ def test_analyze_with_real_fonts():
     """Test analyze command with real font files"""
     runner = CliRunner()
     
-    # Use actual font files from the workspace
-    font1 = Path('NotoSansJP-Bold.ttf')
-    font2 = Path('NotoSansKR-Bold.ttf')
+    # 使用小型字体文件来加快测试速度
+    font1 = Path('fonts/NotoSans-Light.ttf')
+    font2 = Path('fonts/NotoSans-Regular.ttf')
     
     if font1.exists() and font2.exists():
         result = runner.invoke(main, ['analyze', str(font1), str(font2)])
@@ -80,9 +80,9 @@ def test_deduplicate_with_real_fonts():
     """Test deduplicate command with real font files"""
     runner = CliRunner()
     
-    # Use actual font files from the workspace
-    font1 = Path('NotoSansJP-Bold.ttf')
-    font2 = Path('NotoSansKR-Bold.ttf')
+    # 使用最小的字体文件来加快测试速度
+    font1 = Path('fonts/NotoSansTaiViet-Regular.ttf')  # 只有 68KB
+    font2 = Path('fonts/NotoSans-Regular.ttf')
     
     if font1.exists() and font2.exists():
         # Don't use isolated filesystem since we need access to real fonts
@@ -107,7 +107,7 @@ def test_invalid_unicode_range():
     """Test that invalid Unicode range format is rejected"""
     runner = CliRunner()
     
-    font1 = Path('NotoSansJP-Bold.ttf')
+    font1 = Path('fonts/NotoSansJP-Bold.ttf')
     
     if font1.exists():
         import tempfile
